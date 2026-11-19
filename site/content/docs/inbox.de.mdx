@@ -25,6 +25,10 @@ Geschlossene und gemergte Pull Requests verschwinden aus der Inbox. Draft-Pull-R
 
 Neben den Pull Requests gibt es einen zweiten Bereich für Issues. Mit der Auswahl oben in der Seitenleiste wechselst du zwischen **Pull Requests** und **Issues**.
 
+Der Issue-Bereich zeigt Issues, die dir zugewiesen sind, die du eröffnet hast oder die dich erwähnen. Mit der Facette **MEINE** oben in seiner Seitenleiste grenzt du die Liste auf eine der drei ein. Klicke zum Beispiel auf **Mir zugewiesen**, um alle offenen Issues zu sehen, die dir zugewiesen sind. Ein Issue, das dir zugewiesen ist und dich erwähnt, zählt in beiden Zeilen.
+
+Ein Repository musst du dafür nicht beobachten: Der Issue-Bereich sucht auf ganz GitHub nach Issues, die dir zugewiesen sind, die du eröffnet hast oder in denen du erwähnt wirst, und **Mir zugewiesen** in der Seitenleiste grenzt auf Erstere ein. Hast du dich per Device-Flow angemeldet, erscheinen Issues aus öffentlichen Repositorys immer, aus privaten aber nur von Ownern, bei denen die GitHub App von Shepherd installiert ist. Das steht am Ende der Issue-Seitenleiste, zusammen mit der Schaltfläche **Shepherd bei einem weiteren Owner installieren…**. Arbeitest du in vielen Organisationen mit, sieht eine Anmeldung mit klassischem Token (Scope `repo`) alles, was dein Konto sieht. Archivierte Repositorys werden immer übersprungen.
+
 ### Einen Pull Request ausblenden
 
 Klicke eine Zeile mit der rechten Maustaste an und wähle **Diesen Pull Request ausblenden**. Ein Hinweis bietet **Rückgängig** an. Eine neue Review-Anfrage holt einen ausgeblendeten Pull Request zurück. Die vollständige Liste findest du unter Einstellungen → Sync bei **Ausgeblendete Pull Requests**.
@@ -43,7 +47,7 @@ Die Liste kannst du auch unter Einstellungen → Sync bei **Beobachtete Reposito
 
 ![Beobachtete Repositorys in der Seitenleiste](/watched-repositories.png)
 
-Ein Warndreieck statt einer Zahl heißt: Shepherd kann das Repository nicht sehen. Die GitHub-Suche liefert für ein Repository, auf das deine Anmeldung keinen Zugriff hat, einfach nichts. Ohne die Warnung sähest du nur eine leere Liste. Fahre mit dem Mauszeiger über die Zeile, um den Grund zu lesen. Hast du dich per Device-Flow angemeldet, wähle mit Rechtsklick **Shepherd bei … installieren** (mit dem Namen des Owners). Ist die App installiert, wähle **Zugriff erneut prüfen**. Hast du dich mit einem Token angemeldet, gib dem Token Zugriff auf den Owner des Repositorys. Siehe [GitHub-Token](/de/docs/github-token#device-flow-und-organisationen).
+Ein Warndreieck neben der Zahl heißt: Shepherd kann das Repository nicht sehen. Die GitHub-Suche liefert für ein Repository, auf das deine Anmeldung keinen Zugriff hat, einfach nichts. Ohne die Warnung sähest du nur eine leere Liste. Eine Zeile unter **REPOSITORYS** sagt dann, wie viele beobachtete Repositorys betroffen sind. Fahre mit dem Mauszeiger über die Zeile, um den Grund zu lesen. Hast du dich per Device-Flow angemeldet, klicke in dieser Zeile auf **Shepherd installieren…** oder wähle mit Rechtsklick auf das Repository **Shepherd bei … installieren** (mit dem Namen des Owners). Ist die App installiert, klicke auf **Zugriff erneut prüfen**. Sobald Shepherd einen Pull Request aus dem Repository findet, verschwindet die Warnung von selbst. Hast du dich mit einem Token angemeldet, gib dem Token Zugriff auf den Owner des Repositorys. Siehe [GitHub-Token](/de/docs/github-token#device-flow-und-organisationen).
 
 ### Einen lokalen Clone hinzufügen
 

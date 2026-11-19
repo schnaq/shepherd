@@ -68,4 +68,13 @@ final class RailStabilityTests: XCTestCase {
     func testAnEmptyWatchListHasNoBlock() {
         XCTAssertTrue(InboxSidebar.watchedFacets([], facets: [(repo: shepherd, count: 1)]).isEmpty)
     }
+
+    // MARK: - The access cross-check (ADR 0005's 2026-11-19 amendment)
+
+    func testARepositoryTheInboxHoldsARowFromIsReadableInAnyCasing() {
+        let rows = [row("1", repo: shepherd)]
+        XCTAssertTrue(InboxModel.holdsRows(from: RepoRef(owner: "Schnaq", name: "Shepherd"), in: rows))
+        XCTAssertFalse(InboxModel.holdsRows(from: site, in: rows))
+        XCTAssertFalse(InboxModel.holdsRows(from: shepherd, in: []))
+    }
 }

@@ -160,6 +160,41 @@ final class ResponseMappingIssueTests: XCTestCase {
         }
     }
 
+    // MARK: - Partial answers (ADR 0032's 2026-11-19 amendment)
+
+    func testALinkGitHubRefusedDropsThatLinkAndKeepsTheIssue() async throws {
+        // One linked pull request lives in an owner the token cannot read. Refusing the page
+        // would drop every issue of the facet; keeping it costs that one link.
+        let transport = MockTransport()
+        await transport.route("ShepherdIssueSweep", try Fixture.response("issue-search-partial"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let issues = try await client.searchOpenIssues(queries: [.assigned])
+        XCTAssertEqual(issues.map(\.id), ["I_kwDOIssueOne"])
+        XCTAssertEqual(issues.first?.myRelation, [.assigned])
+        XCTAssertEqual(issues.first?.linkedPullRequests.map(\.number), [131])
+    }
+
+    func testARefusedSearchStillFailsRatherThanReadingAsNoIssues() async throws {
+        // An empty facet would reach the store's prune and delete every row it holds.
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdIssueSweep",
+            Fixture.response(json: """
+            {"data":{"search":null},
+             "errors":[{"type":"FORBIDDEN","path":["search"],"message":"Resource not accessible by integration"}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.searchOpenIssues(queries: [.assigned])
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected.
+        }
+    }
+
     // MARK: - The fallback shape
 
     /// Decodes the timeline fixture the way the client would, without sending it.

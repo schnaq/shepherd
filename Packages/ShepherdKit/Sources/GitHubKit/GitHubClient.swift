@@ -105,9 +105,14 @@ public actor GitHubClient {
 
     /// Pages one GraphQL `search` connection — the loop both sweeps (pull requests and issues)
     /// share, so they differ only in document, payload type and row mapper.
+    /// - Parameter acceptsPartialData: Keep a page GitHub answered only in part, as
+    ///   ``pullRequestConversation(repo:number:)`` does. A page whose connection was refused as a
+    ///   whole — `nodes` `null`, or every node `null` — still throws: kept, it would be an empty
+    ///   facet, and the sweep's prune would delete every row that facet holds.
     private func sweep<Payload: Decodable, Node, Row>(
         document: String,
         rawQuery: String,
+        acceptsPartialData: Bool = false,
         page: (Payload) -> (nodes: [Node?]?, pageInfo: PageInfoDTO?),
         map: (Node) -> Row?
     ) async throws -> [Row] {
@@ -126,9 +131,15 @@ public actor GitHubClient {
                 document: document,
                 variables: variables,
                 resource: "search",
-                isIdempotent: true
+                isIdempotent: true,
+                acceptsPartialData: acceptsPartialData
             )
             let (nodes, pageInfo) = page(data)
+            if acceptsPartialData {
+                guard let nodes, nodes.isEmpty || nodes.contains(where: { $0 != nil }) else {
+                    throw GitHubError.graphQL(messages: ["GitHub refused the search \(rawQuery)"])
+                }
+            }
             results.append(contentsOf: (nodes ?? []).compactMap { $0 }.compactMap(map))
             guard pageInfo?.hasNextPage == true, let next = pageInfo?.endCursor else { break }
             cursor = next
@@ -163,9 +174,17 @@ public actor GitHubClient {
 
     private func searchIssues(_ query: IssueQuery) async throws -> [IssueRowSummary] {
         // The sweep's own five-page cap applies here too (see `sweep`).
+        //
+        // Partial answers are kept (ADR 0032's 2026-11-19 amendment). An issue's
+        // `closedByPullRequestsReferences` may point at a pull request in an owner the token
+        // cannot read — the GitHub App not installed there, SAML — and GitHub answers that one
+        // link with `null` and a `FORBIDDEN` error. Refusing the page failed the whole issue
+        // sweep on every cycle, because of somebody else's pull request. The mapper already
+        // drops `null` links.
         try await sweep(
             document: GraphQLDocuments.searchIssues,
             rawQuery: query.rawQuery,
+            acceptsPartialData: true,
             page: { (data: SearchIssuesData) in (data.search?.nodes, data.search?.pageInfo) },
             map: {
                 ResponseMapping.issueRowSummary(
@@ -1838,9 +1857,9 @@ public actor GitHubClient {
     ///   whether replaying the document after a dropped connection is safe.
     /// - Parameter acceptsPartialData: `true` to keep the `data` of an answer that also carries
     ///   `errors`. GitHub nulls what it would not resolve (a node behind SAML enforcement) and
-    ///   answers the rest. Only the conversation read sets it (ADR 0043), because its mapper
-    ///   drops the nulled nodes; every other read would rather fail than act on half an answer.
-    ///   A rate limit throws either way.
+    ///   answers the rest. Only the conversation read (ADR 0043) and the issues sweep (ADR 0032)
+    ///   set it, because their mappers drop the nulled nodes; every other read would rather fail
+    ///   than act on half an answer. A rate limit throws either way.
     private func graphQL<Payload: Decodable>(
         document: String,
         variables: [String: GraphQLValue],

@@ -21624,6 +21624,126 @@
           }
         }
       }
+    },
+    "Assigned to me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mir zugewiesen"
+          }
+        }
+      }
+    },
+    "Opened by me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von mir eröffnet"
+          }
+        }
+      }
+    },
+    "Mentioning me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwähnt mich"
+          }
+        }
+      }
+    },
+    "MINE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEINE"
+          }
+        }
+      }
+    },
+    "Which of your three searches found the issue. An issue that is assigned to you and mentions you is counted in both.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche deiner drei Suchen das Issue gefunden hat. Ein Issue, das dir zugewiesen ist und dich erwähnt, zählt in beiden."
+          }
+        }
+      }
+    },
+    "Issues from public repositories always reach this list. From private ones, only where Shepherd is installed on the owner: only an owner can install it, everyone else can request it. Or sign in with a classic token (repo scope) to see everything your GitHub account sees.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issues aus öffentlichen Repositorys kommen immer in diese Liste. Aus privaten nur, wenn Shepherd beim Owner installiert ist: Installieren kann nur ein Owner, alle anderen können es anfragen. Oder melde dich mit einem klassischen Token (Scope „repo“) an, dann siehst du alles, was dein GitHub-Konto sieht."
+          }
+        }
+      }
+    },
+    "Install Shepherd on another owner…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd bei einem weiteren Owner installieren…"
+          }
+        }
+      }
+    },
+    "Install Shepherd…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd installieren…"
+          }
+        }
+      }
+    },
+    "%lld watched repositories not visible to Shepherd": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtetes Repository für Shepherd nicht sichtbar"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtete Repositorys für Shepherd nicht sichtbar"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repository not visible to Shepherd"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repositories not visible to Shepherd"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "version": "1.0"

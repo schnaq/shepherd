@@ -56,6 +56,24 @@ extension IssueStateFilter {
     }
 }
 
+extension IssueRelation {
+    /// The rail's label for this relation — the three searches the sweep runs, in its words.
+    var facetTitle: String {
+        switch self {
+        case .assigned: return String(localized: "Assigned to me")
+        case .authored: return String(localized: "Opened by me")
+        case .mentioned: return String(localized: "Mentioning me")
+        }
+    }
+
+    /// The tooltip every relation row shares: an issue can be in more than one.
+    static var railHelp: String {
+        String(
+            localized: "Which of your three searches found the issue. An issue that is assigned to you and mentions you is counted in both."
+        )
+    }
+}
+
 extension IssueAgentPullRequestFilter {
     /// The rail's label for this half.
     var facetTitle: String {
@@ -112,7 +130,7 @@ struct ContentKindPicker: View {
 
 // MARK: - The issues rail
 
-/// The left rail while the issues section is showing: STATE, the agent-pull-request facet,
+/// The left rail while the issues section is showing: MINE, STATE, the agent-pull-request facet,
 /// LABELS, AGE, REPOSITORIES, and the two pinned rows — Fleet and Settings (ADR 0032, ADR 0035).
 ///
 /// A view of its own rather than a `ContentKind` branch inside ``InboxSidebar``, because the two
@@ -122,23 +140,28 @@ struct ContentKindPicker: View {
 /// (``RailSectionHeader``) and the two pinned rows (``RailFleetRow``, ``RailSettingsRow``),
 /// which is where the consistency actually has to live.
 ///
-/// The section order is the order a triage pass reads them in: whether the issue is still open at
-/// all, then what nobody has started on, then what it is about, then how long it has been sitting
-/// there, then where it lives.
+/// The section order is the order a triage pass reads them in: why the issue is yours at all,
+/// then whether it is still open, then what nobody has started on, then what it is about, then how
+/// long it has been sitting there, then where it lives.
 struct IssueSidebar: View {
     /// The issues model.
     let model: IssueInboxModel
     /// Opens the Settings window.
     var onOpenSettings: () -> Void
+    /// Whether the user signed in through the Shepherd GitHub App, which only sees the owners it
+    /// is installed on (``AppEnvironment/offersAppInstall``).
+    var offersAppInstall = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                relationFacet
                 stateFacet
                 agentPullRequestFacet
                 labelFacet
                 ageFacet
                 repositoriesFacet
+                installHint
             }
             .padding(.horizontal, 10)
             .padding(.top, 12)
@@ -161,6 +184,34 @@ struct IssueSidebar: View {
     }
 
     // MARK: - Sections
+
+    /// Assigned to me / opened by me / mentioning me (ADR 0032's 2026-11-19 amendment).
+    ///
+    /// First, because it is the question a user asks of this section before any other — "what is
+    /// assigned to me" — and the only one the section could not answer before. Drawn as soon as
+    /// one relation is populated, for the STATE facet's reason: a single row still says what the
+    /// list is made of.
+    @ViewBuilder
+    private var relationFacet: some View {
+        let facets = model.relationFacets
+        if !facets.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                RailSectionHeader(title: String(localized: "MINE"))
+                ForEach(facets, id: \.relation) { facet in
+                    RailRow(
+                        title: facet.relation.facetTitle,
+                        count: facet.count,
+                        isSelected: model.relationFilter == facet.relation
+                    ) {
+                        model.relationFilter = model.relationFilter == facet.relation
+                            ? nil
+                            : facet.relation
+                    }
+                    .help(IssueRelation.railHelp)
+                }
+            }
+        }
+    }
 
     /// The open/closed facet (ADR 0032's 2026-09-04 amendment).
     ///
@@ -295,6 +346,32 @@ struct IssueSidebar: View {
                         .padding(.vertical, 4)
                 }
             }
+        }
+    }
+
+    /// Says where the section's edge is, after a device-flow sign-in (ADR 0032's 2026-11-19
+    /// amendment).
+    ///
+    /// GitHub's search leaves out an issue in a repository of an owner the Shepherd app is not
+    /// installed on, with no error, so a missing issue looks exactly like no issue. The pull-request
+    /// rail can flag a *watched* repository; here there is no list of repositories to flag, so the
+    /// rail states the rule once, quietly, at its end, with the one action that changes it.
+    @ViewBuilder
+    private var installHint: some View {
+        if offersAppInstall {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(
+                    localized: "Issues from public repositories always reach this list. From private ones, only where Shepherd is installed on the owner: only an owner can install it, everyone else can request it. Or sign in with a classic token (repo scope) to see everything your GitHub account sees."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Button(String(localized: "Install Shepherd on another owner…")) {
+                    NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 24))
+            }
+            .padding(.horizontal, 10)
         }
     }
 }

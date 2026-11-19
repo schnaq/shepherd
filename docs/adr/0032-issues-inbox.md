@@ -837,3 +837,48 @@ it is `issue.assigned_to_agent`, fired when the run is *actually running* rather
 button was pressed — the plan's §11 has the argument, and the short version is that a click can be
 followed by a missing checkout and a queued comment can fail. Both say who is on it; neither
 carries the brief.
+
+## Amendment, 2026-11-19 — "only what is assigned to me", and a sweep that no longer loses it
+
+A user asked to see *all* issues assigned to them. Two things stood in the way.
+
+### The rail could not isolate a relation
+
+The section is the union of three searches (`assignee:@me`, `author:@me`, `mentions:@me`), and
+every row has always carried the relations that found it (`IssueRowSummary.myRelation`). The rail
+had no facet over them, so an assigned issue sat in the same list as every issue that merely
+mentioned the user. `IssueFilter.anyOfRelations` existed in the store and nothing used it.
+
+A **MINE** facet now leads the rail, above STATE: *Assigned to me*, *Opened by me*, *Mentioning me*.
+It is `IssueInboxModel.relationFilter`, applied in Swift with the other facets rather than through
+the store, for the reason the 2026-09-04 amendment gives: the observation stays wide and the facets
+narrow it. The counts are taken over the state facet's half like the other four. A relation no row
+has is omitted. An issue in two relations is counted under both, and the tooltip says so. It is
+part of `hasActiveFacet` and `clearFacets()`, and the list header's chip names it when it is the
+only facet set. No `shepherd://` parameter was added, because no issue facet has one.
+
+### One forbidden link dropped the whole facet
+
+`searchIssues` selects `closedByPullRequestsReferences`. When one of those pull requests lives in
+an owner the token cannot read, GitHub answers that node with `null` and a `FORBIDDEN` error. Two
+examples are the GitHub App not being installed there, and SAML. `graphQL` refused any answer with
+`errors`, so the facet threw, and with it the whole issue sweep. That happened on every cycle for
+as long as the link existed. No issue reached the section or left it, because of somebody else's
+pull request.
+
+The issue sweep now passes `acceptsPartialData: true`, the conversation read's precedent (ADR
+0043). The mapper already drops `null` links. `sweep` keeps one guard from that precedent: a page
+whose `nodes` is `null`, or holds nothing but `null`s, still throws. Kept, it would be an empty
+facet, and `saveIssueSummaries(pruneMissing: true)` would delete every row it holds. The
+pull-request sweep is unchanged, for the reason ADR 0005's 2026-10-29 amendment gives.
+
+### Where the section ends, stated once
+
+After a device-flow sign-in the search sees public repositories everywhere but private ones only
+of owners the Shepherd app is installed on, and leaves the rest out without an error. The sentence
+says both halves and names the classic-token sign-in as the way to see everything the account sees,
+because the user this was built for contributes across many organisations and cannot install the
+app on most of them. The issue rail has no list of repositories to flag, so it
+ends with one muted sentence saying so, in the wording `AppEnvironment.accessProblem(for:)` uses,
+and *Install Shepherd on another owner…*. A token sign-in shows nothing, because there the fix is
+the token's scope. `archived:false` stays in the query.

@@ -207,12 +207,14 @@ struct InboxSidebar: View {
                 .padding(.trailing, 10)
                 .padding(.bottom, 6)
             }
+            accessSummary
             ForEach(watchedFacets, id: \.repo.fullName) { facet in
                 let isLinked = hasLocalCheckout(facet.repo)
                 let problem = accessProblem(facet.repo)
-                // A warning instead of a count: GitHub answers a repository the token cannot see
-                // with an empty search, and a zero would say "nothing open" when the truth is
-                // "Shepherd cannot look".
+                // A warning beside the count: GitHub answers a repository the token cannot see
+                // with an empty search, so a zero there may mean "Shepherd cannot look" rather
+                // than "nothing open". The count stays (ADR 0005's 2026-11-19 amendment) — the
+                // glyph alone read as a broken row, and hid the number when the flag was wrong.
                 let glyph: (image: String, label: String)? = problem != nil
                     ? ("exclamationmark.triangle.fill", String(localized: "no access"))
                     : isLinked ? ("laptopcomputer", String(localized: "local checkout linked")) : nil
@@ -221,7 +223,8 @@ struct InboxSidebar: View {
                     systemImage: "binoculars",
                     trailingSystemImage: glyph?.image,
                     trailingAccessibilityLabel: glyph?.label,
-                    count: problem != nil ? nil : facet.count,
+                    trailingTint: problem != nil ? Theme.pending : Theme.textMuted,
+                    count: facet.count,
                     isSelected: model.repoFilter.map { $0.isSameRepository(as: facet.repo) } ?? false
                 ) {
                     toggleRepoFilter(facet.repo)
@@ -283,6 +286,41 @@ struct InboxSidebar: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
             }
+        }
+    }
+
+    /// One visible line when watched repositories cannot be read, with both fixes on it (ADR
+    /// 0005's 2026-11-19 amendment).
+    ///
+    /// The row's glyph carried this alone before, with the reason in a tooltip and the fixes in a
+    /// context menu — nothing a reader finds without already knowing it is there. The per-repository
+    /// sentence stays in the tooltip; this line only says how many and offers the way out.
+    @ViewBuilder
+    private var accessSummary: some View {
+        let unreadable = watchedFacets.filter { accessProblem($0.repo) != nil }
+        if !unreadable.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(
+                    String(localized: "\(unreadable.count) watched repositories not visible to Shepherd"),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.pending)
+                .fixedSize(horizontal: false, vertical: true)
+                // Stacked rather than side by side: the rail is too narrow for both labels.
+                VStack(alignment: .leading, spacing: 4) {
+                    if offersAppInstall {
+                        Button(String(localized: "Install Shepherd…")) {
+                            NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 24))
+                    }
+                    Button(String(localized: "Check access again"), action: onCheckAccessAgain)
+                        .buttonStyle(SecondaryButtonStyle(height: 24))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
         }
     }
 
@@ -397,6 +435,8 @@ struct RailRow: View {
     var trailingSystemImage: String?
     /// What the trailing glyph says to VoiceOver; a glyph is never the only carrier (ADR 0033).
     var trailingAccessibilityLabel: String?
+    /// The trailing glyph's colour — muted unless it is a warning.
+    var trailingTint: Color = Theme.textMuted
     /// The trailing count.
     var count: Int?
     /// Whether the row is the active facet.
@@ -432,7 +472,7 @@ struct RailRow: View {
                 if let trailingSystemImage {
                     Image(systemName: trailingSystemImage)
                         .font(.system(size: 10))
-                        .foregroundStyle(Theme.textMuted)
+                        .foregroundStyle(trailingTint)
                         .accessibilityLabel(Text(trailingAccessibilityLabel ?? ""))
                 }
                 if let count {

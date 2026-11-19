@@ -220,3 +220,29 @@ Per-facet error isolation in `searchOpenPullRequests` was considered and left ou
 would reach `savePullRequestSummaries(pruneMissing: true)`, which would prune that facet's rows and
 re-announce them on the next good sweep. Doing it properly means teaching the engine to skip the
 prune on a partial result, which is its own change.
+
+## Amendment (2026-11-19): the warning is visible, keeps the count and yields to evidence
+
+After 1.16.0 a user reported "I don't see my watched repositories any more, there is only an
+exclamation mark." The 2026-10-29 rail bullet put a grey 10 pt triangle *instead of* the count. It
+explained itself only in a tooltip and offered its fixes only in a context menu. A flag that was
+right looked like a broken row, and a flag that was wrong hid the row's number with no way to tell.
+
+- **The count stays.** The triangle sits beside it, tinted `Theme.pending`, the colour
+  `RepositoryAccessWarning` already uses for the same sentence. `RailRow` gained a
+  `trailingTint`.
+- **Rows beat the check.** A watched repository the inbox holds at least one pull request from is
+  not flagged, whatever `canRead(repo:)` recorded. `InboxModel.holdsRows(from:in:)` is asked of
+  `storedRows`, so a hidden pull request still counts. It is never asked of the current smart view,
+  which says nothing about access. The sweep can only return a repository the token can read, so
+  this cannot hide a real problem. It removes a stale or wrong flag as soon as a sweep brings
+  something in.
+- **One visible line.** When a watched repository is flagged, a line under the REPOSITORIES header
+  says how many ("2 watched repositories not visible to Shepherd"). It offers *Install Shepherd…*
+  after a device-flow sign-in, and *Check access again*. The per-repository sentence stays in the
+  row's tooltip, and the context menu keeps both actions.
+
+The check still runs only at sign-in and on an edit of the watch list. Re-checking flagged
+repositories on ⌘R or on app activation was considered and left out. Rows-beat-the-check clears
+the common stale case without a request, and *Check access again* is now on screen rather than in
+a menu.
