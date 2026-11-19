@@ -68,6 +68,87 @@ enum AgentEffort: String, CaseIterable, Codable, Sendable, Identifiable {
     var id: String { rawValue }
 }
 
+/// How a delegation is run: headless in Shepherd, or handed to a session the user drives (ADR
+/// 0011's 2026-11-19 amendment).
+///
+/// Four cases rather than three and a Remote Control toggle: a Remote Control session *is* an
+/// interactive Terminal session, only reachable from claude.ai and the phone as well, and one
+/// remembered value is simpler than a value and a flag that only means something for one of the
+/// other values.
+enum DelegationHandoff: String, CaseIterable, Identifiable, Sendable {
+    /// `claude -p … --output-format stream-json` inside Shepherd, with the transcript in the
+    /// sheet — the only path an automatic rule, a session send or a custom CLI ever takes.
+    case background
+    /// An interactive Claude Code session in a terminal window, in the prepared worktree.
+    case terminal
+    /// The same session with `--remote-control`, so claude.ai/code and the Claude app reach it.
+    case remoteControl
+    /// `claude --cloud`: a session on claude.ai/code that works on the GitHub repository, not on
+    /// this Mac — so no worktree is prepared for it.
+    case cloud
+
+    var id: String { rawValue }
+
+    /// The label in the sheet's picker.
+    var title: String {
+        switch self {
+        case .background: return String(localized: "In the background")
+        case .terminal: return String(localized: "Interactive session")
+        case .remoteControl: return String(localized: "Remote Control")
+        case .cloud: return String(localized: "Claude Code on the web")
+        }
+    }
+
+    /// One line under the picker: where the work happens and who drives it.
+    var explanation: String {
+        switch self {
+        case .background:
+            return String(localized: "Shepherd runs the agent headless in a worktree and shows the transcript here.")
+        case .terminal:
+            return String(localized: "Opens Claude Code in your terminal, in a prepared worktree. You drive the session.")
+        case .remoteControl:
+            return String(localized: "Like an interactive session, and also reachable from claude.ai/code and the Claude app.")
+        case .cloud:
+            return String(localized: "Starts a session on claude.ai/code. It works on the repository on GitHub, not on your local changes.")
+        }
+    }
+
+    /// Whether the run is a session the user drives rather than one Shepherd reads.
+    var isInteractive: Bool { self == .terminal || self == .remoteControl }
+}
+
+/// The terminal app an interactive delegation opens in.
+///
+/// Per Mac rather than synced: which terminals are installed is a fact about the machine.
+enum TerminalApp: String, CaseIterable, Identifiable, Sendable {
+    /// Terminal.app, which ships with every Mac.
+    case terminal
+    /// iTerm2.
+    case iTerm
+    /// Ghostty.
+    case ghostty
+
+    var id: String { rawValue }
+
+    /// The product name, in the picker and in "Running in Terminal".
+    var title: String {
+        switch self {
+        case .terminal: return String(localized: "Terminal")
+        case .iTerm: return String(localized: "iTerm")
+        case .ghostty: return String(localized: "Ghostty")
+        }
+    }
+
+    /// The bundle identifier that says the app is installed, and that it is opened by.
+    var bundleIdentifier: String {
+        switch self {
+        case .terminal: return "com.apple.Terminal"
+        case .iTerm: return "com.googlecode.iterm2"
+        case .ghostty: return "com.mitchellh.ghostty"
+        }
+    }
+}
+
 /// Which CLI Shepherd invokes.
 ///
 /// Claude Code is the first-class integration (ADR 0011): its `stream-json` output is parsed

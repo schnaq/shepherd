@@ -772,6 +772,18 @@ final class DelegationModelTests: XCTestCase {
         let automatic = makeModel(runner: ScriptedAgentRunner(), isAutomatic: true, handoff: .terminal)
         XCTAssertFalse(automatic.offersHandoff)
         XCTAssertEqual(automatic.handoff, .background, "nobody is at a terminal for a rule")
+
+        let custom = DelegationModel(
+            context: context,
+            configuration: AgentCLIConfiguration(kind: .custom(commandTemplate: "/bin/agent {prompt}")),
+            readiness: .ready,
+            runner: ScriptedAgentRunner(),
+            worktree: nil,
+            handoff: .terminal,
+            openSession: { _, _ in }
+        )
+        XCTAssertFalse(custom.offersHandoff)
+        XCTAssertEqual(custom.handoff, .background, "Shepherd does not know a custom CLI's interactive form")
     }
 
     func testAskingForEachActionIsDroppedForABackgroundRun() {

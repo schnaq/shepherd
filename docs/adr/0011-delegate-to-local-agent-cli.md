@@ -373,7 +373,8 @@ Both still hold for a run Shepherd reads.
   script reads it at run time as `"$(cat '<file>')"`. zsh expands one double-quoted command
   substitution to exactly one argv element and never parses its contents again. This was checked
   with a fake `claude` that prints its arguments: a prompt containing `'; rm -rf ~`, `$(…)`,
-  backticks and a leading `-p` arrived as one argument and ran nothing. Both files are in
+  backticks, a trailing backslash and a line starting with `-p` arrived as one argument and ran
+  nothing. Both files are in
   `Application Support/Shepherd/Launchers`, a sibling of the worktrees directory, so a session cannot
   commit them. They are overwritten on the next hand-off of the same target. Every prompt starts
   with Shepherd's preamble, so it never starts with `-`, and no `--` is needed.

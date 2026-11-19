@@ -238,7 +238,7 @@ struct DelegationSheet: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .disabled(model.isBusy || model.isHandedOffLocally)
+            .disabled(!model.canChangeHandoff)
             Text(model.handoff.explanation)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
@@ -253,7 +253,13 @@ struct DelegationSheet: View {
             Image(systemName: "shield.lefthalf.filled")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
-            if model.handoff != .cloud {
+            if !model.offersPermissionChoice {
+                // A custom template or a session command carries its own mode; this is the
+                // configured one, as the line always said.
+                Text(model.configuration.permissionMode.title)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+            } else if model.handoff != .cloud {
                 Picker(String(localized: "Permission mode"), selection: permissionBinding) {
                     ForEach(model.permissionModeChoices) { mode in
                         Text(mode.title).tag(mode)

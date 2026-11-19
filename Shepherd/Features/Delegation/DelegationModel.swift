@@ -183,6 +183,26 @@ final class DelegationModel: Identifiable {
     /// The permission mode of the next run; starts at the configured one.
     var permissionMode: AgentPermissionMode
 
+    /// Whether the sheet's "How" may change now: before a run, or after a cloud hand-off, which
+    /// left nothing on this Mac.
+    ///
+    /// Locked otherwise, because *Run again* would carry the new choice: a cloud run started from
+    /// a sheet holding local work would replace that work's diff and push button with a state that
+    /// has neither. *Discard worktree* unlocks it.
+    var canChangeHandoff: Bool {
+        guard !isBusy else { return false }
+        switch state {
+        case .idle, .handedOff(.cloud, _): return true
+        default: return false
+        }
+    }
+
+    /// Whether the run's permission mode reaches the CLI at all: not for a custom template, and
+    /// not for a session send, whose command carries its own (ADR 0030).
+    var offersPermissionChoice: Bool {
+        configuration.kind == .claudeCode && context.session == nil
+    }
+
     /// The modes the sheet offers for ``handoff``: ``AgentPermissionMode/manual`` only for a
     /// session somebody is at.
     var permissionModeChoices: [AgentPermissionMode] {
