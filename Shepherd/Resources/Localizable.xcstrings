@@ -8773,6 +8773,16 @@
         }
       }
     },
+    "Mark a file viewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Datei als gesehen markieren"
+          }
+        }
+      }
+    },
     "Mark ready for review": {
       "localizations": {
         "de": {
@@ -14619,6 +14629,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unbenannte Antwort"
+          }
+        }
+      }
+    },
+    "Unmark a viewed file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Datei nicht mehr als gesehen markieren"
           }
         }
       }

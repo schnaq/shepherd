@@ -57,6 +57,9 @@ public protocol PullRequestFetching: Sendable {
     /// permission refusal. The first is what the retry of a removal whose answer was lost finds,
     /// and failing it would tell the user a reaction they took back is still there.
     func viewerHasReacted(subjectID: String, content: ReactionContent) async throws -> Bool
+    /// Ticks or unticks a file's *Viewed* checkbox for the viewer (ADR 0028, 2026-11-19
+    /// amendment).
+    func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws
     /// Merges a pull request.
     func mergePullRequest(
         repo: RepoRef,

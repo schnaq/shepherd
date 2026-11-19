@@ -368,6 +368,56 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertTrue(detail.timeline.contains(where: { $0.kind == .reviewApproved }))
     }
 
+    // MARK: - Viewed files (ADR 0028, 2026-11-19 amendment)
+
+    func testDetailFetchCarriesGitHubsViewedTicksAndBlobs() async throws {
+        let transport = try await makeTransport()
+        await transport.route("ShepherdPullRequestViewedFiles", try Fixture.response("pull-viewed-files"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        // `DISMISSED` — changed since it was ticked — is not viewed.
+        XCTAssertEqual(
+            detail.files.filter(\.isViewed).map(\.path),
+            ["Sources/Auth/TokenStore.swift", "Tests/AuthTests/LegacyKeychainTests.swift"]
+        )
+        XCTAssertEqual(detail.files.first?.blobSha, "1a2b3c")
+    }
+
+    func testAViewedReadThatFailsLeavesTheDetailIntact() async throws {
+        // No route: the mock answers 501, and the files arrive without GitHub's ticks.
+        let transport = try await makeTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertFalse(detail.files.contains(where: \.isViewed))
+    }
+
+    func testMarkAndUnmarkSendTheirMutationsWithThePullRequestAndPath() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdMarkFileAsViewed",
+            Fixture.response(json: #"{"data":{"markFileAsViewed":{"clientMutationId":null}}}"#)
+        )
+        await transport.route(
+            "ShepherdUnmarkFileAsViewed",
+            Fixture.response(json: #"{"data":{"unmarkFileAsViewed":{"clientMutationId":null}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setFileViewed(pullRequestID: "PR_kwDOAgentOne", path: "a.swift", viewed: true)
+        try await client.setFileViewed(pullRequestID: "PR_kwDOAgentOne", path: "a.swift", viewed: false)
+
+        let bodies = await transport.requests.map { String(decoding: $0.body ?? Data(), as: UTF8.self) }
+        XCTAssertEqual(bodies.count, 2)
+        XCTAssertTrue(bodies[0].contains("markFileAsViewed(input:"))
+        XCTAssertTrue(bodies[0].contains("PR_kwDOAgentOne"))
+        XCTAssertTrue(bodies[1].contains("unmarkFileAsViewed(input:"))
+    }
+
     func testHeadRefOidProbeUsesGraphQL() async throws {
         let transport = MockTransport()
         let head = try Fixture.response("head-oid")

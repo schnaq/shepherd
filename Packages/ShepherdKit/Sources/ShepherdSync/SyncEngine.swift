@@ -975,6 +975,11 @@ public actor SyncEngine {
         /// ``ShepherdPersistence/DatabaseManager/conflictedOutboxCount()`` beside every other
         /// parked row, and left for the user — which is the whole of what ADR 0006 asks for.
         case staleIssue(reason: String)
+        /// GitHub refused a write that is a copy of state kept locally, and the row is dropped
+        /// without a word — the viewed checkbox under a read-only token (ADR 0028, 2026-11-19
+        /// amendment). Nothing is lost: the local tick is the reviewer's record, GitHub's was
+        /// the extra.
+        case dropped
     }
 
     /// Sends everything in the outbox that is due.
@@ -1051,6 +1056,8 @@ public actor SyncEngine {
                     // alert that could offer one. The standing conflicted count and the app's list
                     // of unsent writes, which offers Discard, are the surface.
                     try await store.markOutboxItemConflicted(id: item.id, reason: reason)
+                case .dropped:
+                    try await store.markOutboxItemSucceeded(id: item.id)
                 }
             } catch let error as GitHubError {
                 await handleOutboxFailure(item, error: error)
@@ -1267,6 +1274,19 @@ public actor SyncEngine {
                     content: content
                 )) ?? true
                 if stillThere { throw refusal }
+            }
+            return .sent
+
+        case .setFileViewed(let path, let viewed):
+            // Setting a checkbox twice is harmless, so no replay check. A refusal that no retry
+            // can change — a token that may read but not write, a file no longer in the pull
+            // request, a closed one — drops the row in silence: the tick is in the local store
+            // already, and an alert per `a` press about a copy the reviewer never asked to keep
+            // would be noise. Retryable failures back off like every other row.
+            do {
+                try await github.setFileViewed(pullRequestID: item.prID, path: path, viewed: viewed)
+            } catch let refusal as GitHubError where !refusal.isRetryable {
+                return .dropped
             }
             return .sent
 
@@ -1870,6 +1890,7 @@ public actor SyncEngine {
         case .react: return .reactionChanged
         case .editComment: return .commentEdited
         case .deleteComment: return .commentDeleted
+        case .setFileViewed: return .fileViewedChanged
         }
     }
 

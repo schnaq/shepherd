@@ -114,6 +114,16 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// review or the description cannot, and the drain refuses a row that says otherwise.
     /// - Parameter target: Which comment.
     case deleteComment(ConversationTarget)
+    /// Tick or untick a file's *Viewed* checkbox on GitHub for the signed-in user (ADR 0028,
+    /// 2026-11-19 amendment).
+    ///
+    /// The reviewer's tick is already in the local store when this is queued; the row only
+    /// carries it to GitHub, so a refusal costs GitHub's copy and never the tick. Addressed to the
+    /// pull request by the row's own `prID`, the node id the mutation takes.
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - viewed: `true` to tick, `false` to untick.
+    case setFileViewed(path: String, viewed: Bool)
     /// Post a comment on the issue (ADR 0032).
     /// - Parameters:
     ///   - body: The comment as Markdown source.
@@ -158,6 +168,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .react: return "react"
         case .editComment: return "editComment"
         case .deleteComment: return "deleteComment"
+        case .setFileViewed: return "setFileViewed"
         case .addIssueComment: return "addIssueComment"
         case .addIssueLabel: return "addIssueLabel"
         case .addIssueAssignee: return "addIssueAssignee"
@@ -182,7 +193,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             return updatedAt
         case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread,
              .merge, .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest,
-             .react, .editComment, .deleteComment:
+             .react, .editComment, .deleteComment, .setFileViewed:
             return nil
         }
     }
@@ -218,6 +229,12 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case addPullRequestComment, closePullRequest
         case react
         case editComment, deleteComment
+        case setFileViewed
+    }
+
+    /// The payload keys of ``setFileViewed(path:viewed:)``.
+    private enum FileViewedKeys: String, CodingKey {
+        case path, viewed
     }
 
     /// The payload keys of ``submitReview(_:)`` — one unlabelled value, so `_0`.
@@ -380,6 +397,10 @@ public enum OutboxAction: Sendable, Codable, Hashable {
                 forKey: .deleteComment
             )
             try nested.encode(target, forKey: .target)
+        case .setFileViewed(let path, let viewed):
+            var nested = container.nestedContainer(keyedBy: FileViewedKeys.self, forKey: .setFileViewed)
+            try nested.encode(path, forKey: .path)
+            try nested.encode(viewed, forKey: .viewed)
         case .addIssueComment(let body, let basedOnUpdatedAt):
             var nested = container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,
@@ -541,6 +562,13 @@ public enum OutboxAction: Sendable, Codable, Hashable {
                 forKey: .deleteComment
             )
             self = .deleteComment(try nested.decode(ConversationTarget.self, forKey: .target))
+        case .setFileViewed:
+            // Both required, for the reaction's reason: there is no honest default direction.
+            let nested = try container.nestedContainer(keyedBy: FileViewedKeys.self, forKey: .setFileViewed)
+            self = .setFileViewed(
+                path: try nested.decode(String.self, forKey: .path),
+                viewed: try nested.decode(Bool.self, forKey: .viewed)
+            )
         case .addIssueComment:
             let nested = try container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,

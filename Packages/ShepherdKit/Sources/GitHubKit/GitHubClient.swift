@@ -289,8 +289,16 @@ public actor GitHubClient {
             number: number
         )
         async let checks: [CheckRun] = headSHA.isEmpty ? [] : checkRuns(repo: repo, ref: headSHA)
+        // Tolerated as well (ADR 0028, 2026-11-19 amendment): GitHub's *Viewed* checkboxes are a
+        // convenience on top of the reviewer's own ticks, which the store keeps either way.
+        async let viewedRead: Set<String>? = try? viewedFiles(repo: repo, number: number)
 
-        let fileList = try await files
+        var fileList = try await files
+        if let viewed = await viewedRead {
+            for index in fileList.indices {
+                fileList[index].isViewed = viewed.contains(fileList[index].path)
+            }
+        }
         let commitList = try await commitsRead
         let reviewList = try await reviewsRead
         let threadList = try await threads
@@ -364,6 +372,59 @@ public actor GitHubClient {
             isIdempotent: true
         )
         return ResponseMapping.closingIssues(from: data)
+    }
+
+    /// The paths the signed-in user marked *Viewed* on GitHub (ADR 0028, 2026-11-19 amendment).
+    ///
+    /// `VIEWED` only: `DISMISSED` is GitHub saying the file changed since it was ticked, which is
+    /// unviewed. Thirty pages of 100, the files listing's own cap.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The viewed paths.
+    /// - Throws: Any ``GitHubError`` the request maps to. ``pullRequestDetail(repo:number:)``
+    ///   tolerates every one of them and leaves GitHub's ticks out.
+    public func viewedFiles(repo: RepoRef, number: Int) async throws -> Set<String> {
+        var viewed: Set<String> = []
+        var cursor: String? = nil
+        for _ in 0..<30 {
+            let data: PullRequestViewedFilesData = try await graphQL(
+                document: GraphQLDocuments.pullRequestViewedFiles,
+                variables: [
+                    "owner": .string(repo.owner),
+                    "name": .string(repo.name),
+                    "number": .int(number),
+                    "after": cursor.map { GraphQLValue.string($0) } ?? .null,
+                ],
+                resource: "\(repo.fullName)#\(number) viewed files",
+                isIdempotent: true
+            )
+            let connection = data.repository?.pullRequest?.files
+            for node in (connection?.nodes ?? []).compactMap({ $0 })
+            where node.viewerViewedState == "VIEWED" {
+                if let path = node.path { viewed.insert(path) }
+            }
+            guard connection?.pageInfo?.hasNextPage == true,
+                  let next = connection?.pageInfo?.endCursor
+            else { break }
+            cursor = next
+        }
+        return viewed
+    }
+
+    /// Ticks or unticks a file's *Viewed* checkbox on GitHub for the signed-in user. GraphQL-only.
+    /// - Parameters:
+    ///   - pullRequestID: The pull request's node id.
+    ///   - path: The file path.
+    ///   - viewed: `true` to tick, `false` to untick.
+    public func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {
+        let _: FileViewedData = try await graphQL(
+            document: viewed ? GraphQLDocuments.markFileAsViewed : GraphQLDocuments.unmarkFileAsViewed,
+            variables: ["pullRequestId": .string(pullRequestID), "path": .string(path)],
+            resource: viewed ? "mark file viewed" : "unmark file viewed",
+            // Setting a checkbox to the state it is in is harmless, so a retry may resend it.
+            isIdempotent: true
+        )
     }
 
     /// Fetches a pull request's conversation: GitHub's timeline, oldest first, and what the

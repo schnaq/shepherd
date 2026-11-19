@@ -40,8 +40,18 @@ public struct ChangedFile: Sendable, Codable, Hashable, Identifiable {
     public var deletions: Int
     /// The unified diff for this file, or `nil` for binary files and diffs GitHub truncated.
     public var patch: String?
-    /// Local-only state: whether the user marked the file as viewed.
+    /// Whether the file counts as viewed.
+    ///
+    /// From a fetch, GitHub's own *Viewed* checkbox for the signed-in user — `VIEWED` only, so a
+    /// file GitHub reports as changed since (`DISMISSED`) is not. Read from the store, that or the
+    /// reviewer's own tick made here, which survives a push that left the file's content alone
+    /// (`DatabaseManager.loadPullRequestDetail`).
     public var isViewed: Bool
+    /// The file's blob SHA at the head commit, or `nil` when GitHub did not send one.
+    ///
+    /// Carried for one comparison: a tick made at an older head still holds when the blob is the
+    /// same, which is how GitHub keeps its own checkbox across a push.
+    public var blobSha: String?
 
     /// Creates a changed file.
     public init(
@@ -51,7 +61,8 @@ public struct ChangedFile: Sendable, Codable, Hashable, Identifiable {
         additions: Int = 0,
         deletions: Int = 0,
         patch: String? = nil,
-        isViewed: Bool = false
+        isViewed: Bool = false,
+        blobSha: String? = nil
     ) {
         self.path = path
         self.previousPath = previousPath
@@ -60,6 +71,7 @@ public struct ChangedFile: Sendable, Codable, Hashable, Identifiable {
         self.deletions = deletions
         self.patch = patch
         self.isViewed = isViewed
+        self.blobSha = blobSha
     }
 
     /// `ChangedFile` is identified by its ``path`` within a pull request.

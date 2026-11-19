@@ -35,6 +35,8 @@ extension OutboxAction {
             return adding ? String(localized: "Add a reaction") : String(localized: "Remove a reaction")
         case .editComment: return String(localized: "Edit a comment")
         case .deleteComment: return String(localized: "Delete a comment")
+        case .setFileViewed(_, let viewed):
+            return viewed ? String(localized: "Mark a file viewed") : String(localized: "Unmark a viewed file")
         }
     }
 }
